@@ -17,7 +17,6 @@ func GenerateJWT(secretKey []byte, userID uint) (string, error) {
 
 	tokenString, err := token.SignedString(secretKey)
 
-	fmt.Println(tokenString, err)
 	return tokenString, err
 }
 

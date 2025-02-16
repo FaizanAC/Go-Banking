@@ -1,14 +1,26 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
+	"log"
+	"os"
+
+	"github.com/FaizanAC/Go-Banking/internal/database"
+	"github.com/FaizanAC/Go-Banking/internal/models"
+	"github.com/FaizanAC/Go-Banking/internal/server"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Hello, World!")
-	})
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
-	http.ListenAndServe(":8080", nil)
+	db := database.NewDatabase()
+	db.AutoMigrate(&models.User{})
+
+	s := server.NewServer(
+		db, os.Getenv("PORT"),
+	)
+	s.Start()
 }

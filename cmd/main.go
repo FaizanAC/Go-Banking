@@ -18,6 +18,9 @@ func main() {
 
 	db := database.NewDatabase()
 	db.AutoMigrate(&models.User{})
+	db.AutoMigrate(&models.BankAccount{})
+	db.AutoMigrate(&models.Transaction{})
+	db.AutoMigrate(&models.Transfer{})
 
 	s := server.NewServer(
 		db, os.Getenv("PORT"),

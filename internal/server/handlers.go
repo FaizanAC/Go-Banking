@@ -3,11 +3,14 @@ package server
 import (
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/FaizanAC/Go-Banking/internal/models"
 	"github.com/FaizanAC/Go-Banking/internal/util"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func (s *Server) handleHealthCheck(c *gin.Context) {
@@ -85,25 +88,24 @@ func (s *Server) handleUserCreation(c *gin.Context) {
 }
 
 func (s *Server) handleNewAccount(c *gin.Context) {
-	var account models.BankAccount
-	if err := c.ShouldBindJSON(&account); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
 	userID, hasKey := c.Get("userID")
 	if !hasKey {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	account.UserID = userID.(uint)
 
-	if res := s.db.Create(&account); res.Error != nil {
+	newAccount := models.BankAccount{
+		AccountNumber: util.GenerateAccountNumber(),
+		UserID:        userID.(uint),
+		Balance:       0,
+	}
+
+	if res := s.db.Create(&newAccount); res.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Create Account"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"Account Number": account.AccountNumber})
+	c.JSON(http.StatusCreated, gin.H{"Account Number": newAccount.AccountNumber})
 }
 
 func (s *Server) handleGetAccount(c *gin.Context) {
@@ -115,24 +117,20 @@ func (s *Server) handleGetAccount(c *gin.Context) {
 		return
 	}
 
-	userID, hasKey := c.Get("userID")
-	if !hasKey {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-	account.UserID = userID.(uint)
-
 	c.JSON(http.StatusOK, account)
 }
 
 func (s *Server) handleDeposit(c *gin.Context) {
-	var deposit struct {
-		AccountNumber string  `json:"account_number" binding:"required"`
-		Amount        float64 `json:"amount" binding:"required"`
-	}
+	var deposit models.Transaction
 
 	if err := c.ShouldBindJSON(&deposit); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, hasKey := c.Get("userID")
+	if !hasKey {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
@@ -142,17 +140,27 @@ func (s *Server) handleDeposit(c *gin.Context) {
 		return
 	}
 
-	userID, hasKey := c.Get("userID")
-	if !hasKey {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	if account.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not the owner of this Account"})
 		return
 	}
-	account.UserID = userID.(uint)
 
 	account.Balance += deposit.Amount
 
-	if res := s.db.Save(&account); res.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Deposit"})
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if res := s.db.Save(&account); res.Error != nil {
+			return res.Error
+		}
+
+		deposit.Type = "DEPOSIT"
+		deposit.TransactionID = uuid.New().String()
+		if res := s.db.Save(&deposit); res.Error != nil {
+			return res.Error
+		}
+
+		return nil
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Withdrawl"})
 		return
 	}
 
@@ -160,13 +168,16 @@ func (s *Server) handleDeposit(c *gin.Context) {
 }
 
 func (s *Server) handleWithdraw(c *gin.Context) {
-	var withdraw struct {
-		AccountNumber string  `json:"account_number" binding:"required"`
-		Amount        float64 `json:"amount" binding:"required"`
-	}
+	var withdraw models.Transaction
 
 	if err := c.ShouldBindJSON(&withdraw); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, hasKey := c.Get("userID")
+	if !hasKey {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
@@ -176,12 +187,10 @@ func (s *Server) handleWithdraw(c *gin.Context) {
 		return
 	}
 
-	userID, hasKey := c.Get("userID")
-	if !hasKey {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	if account.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not the owner of this Account"})
 		return
 	}
-	account.UserID = userID.(uint)
 
 	if account.Balance < withdraw.Amount {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Insufficient Balance"})
@@ -190,8 +199,21 @@ func (s *Server) handleWithdraw(c *gin.Context) {
 
 	account.Balance -= withdraw.Amount
 
-	if res := s.db.Save(&account); res.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Withdraw"})
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if res := s.db.Save(&account); res.Error != nil {
+			return res.Error
+		}
+
+		withdraw.Type = "WITHDRAW"
+		withdraw.TransactionID = uuid.New().String()
+
+		if res := s.db.Save(&withdraw); res.Error != nil {
+			return res.Error
+		}
+
+		return nil
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Withdrawl"})
 		return
 	}
 
@@ -200,19 +222,13 @@ func (s *Server) handleWithdraw(c *gin.Context) {
 
 func (s *Server) handleTransfer(c *gin.Context) {
 	var transfer struct {
-		SenderAccountNumber   string  `json:"sender_account_number" binding:"required"`
-		ReceiverAccountNumber string  `json:"receiver_account_number" binding:"required"`
-		Amount                float64 `json:"amount" binding:"required"`
+		Amount        float64 `json:"amount" binding:"required"`
+		AccountNumber string  `json:"accountNumber" binding:"required"`
+		ReceiverID    uint    `json:"receiverID" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&transfer); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	var senderAccount models.BankAccount
-	if err := s.db.Where("account_number = ?", transfer.SenderAccountNumber).First(&senderAccount).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Sender Account not Found"})
 		return
 	}
 
@@ -221,36 +237,54 @@ func (s *Server) handleTransfer(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	senderAccount.UserID = userID.(uint)
 
-	if senderAccount.Balance < transfer.Amount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Insufficient Balance"})
+	var senderAccount models.BankAccount
+	if err := s.db.Where("account_number = ?", transfer.AccountNumber).First(&senderAccount).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Sender Account not Found"})
 		return
 	}
 
-	var receiverAccount models.BankAccount
-	if err := s.db.Where("account_number = ?", transfer.ReceiverAccountNumber).First(&receiverAccount).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Receiver Account not Found"})
+	if senderAccount.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not the owner of this Account"})
 		return
+	}
+
+	transactionDetails := models.Transaction{
+		Amount:        transfer.Amount,
+		AccountNumber: transfer.AccountNumber,
+		TransactionID: uuid.New().String(),
+		Type:          "TRANSFER",
+	}
+
+	transferRow := models.Transfer{
+		SenderID:      userID.(uint),
+		ReceiverID:    transfer.ReceiverID,
+		Amount:        transfer.Amount,
+		Status:        "PENDING",
+		ExpiresOn:     time.Now().Add(time.Second * 3600 * 30),
+		TransactionID: transactionDetails.TransactionID,
 	}
 
 	senderAccount.Balance -= transfer.Amount
-	receiverAccount.Balance += transfer.Amount
 
-	tx := s.db.Begin()
-	if res := tx.Save(&senderAccount); res.Error != nil {
-		tx.Rollback()
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if res := tx.Save(&senderAccount); res.Error != nil {
+			return res.Error
+		}
+
+		if res := tx.Save(&transferRow); res.Error != nil {
+			return res.Error
+		}
+
+		if res := tx.Save(&transactionDetails); res.Error != nil {
+			return res.Error
+		}
+
+		return nil
+	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Transfer"})
 		return
 	}
-
-	if res := tx.Save(&receiverAccount); res.Error != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Transfer"})
-		return
-	}
-
-	tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{"New Balance": senderAccount.Balance})
 }

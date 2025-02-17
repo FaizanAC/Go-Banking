@@ -26,7 +26,7 @@ func AuthorizeRequest(c *gin.Context) {
 		if float64(time.Now().Unix()) > claims["exp"].(float64) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		}
-		c.Set("userID", jwtToken.Claims.(jwt.MapClaims)["sub"].(uint))
+		c.Set("userID", uint(jwtToken.Claims.(jwt.MapClaims)["sub"].(float64)))
 		c.Next()
 	} else {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})

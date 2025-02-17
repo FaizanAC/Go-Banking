@@ -160,7 +160,7 @@ func (s *Server) handleDeposit(c *gin.Context) {
 
 		return nil
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Withdrawl"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Deposit"})
 		return
 	}
 

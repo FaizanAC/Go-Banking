@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/FaizanAC/Go-Banking/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -16,4 +17,13 @@ func NewDatabase() *gorm.DB {
 	}
 
 	return db
+}
+
+func MigrateDB(db *gorm.DB) {
+	db.AutoMigrate(
+		&models.User{},
+		&models.BankAccount{},
+		&models.Transaction{},
+		&models.Transfer{},
+	)
 }

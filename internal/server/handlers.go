@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 )
 
@@ -146,18 +147,20 @@ func (s *Server) handleDeposit(c *gin.Context) {
 
 	account.Balance += deposit.Amount
 
+	deposit.Type = "DEPOSIT"
+	deposit.TransactionID = uuid.New().String()
+
+	eg := errgroup.Group{}
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if res := s.db.Save(&account); res.Error != nil {
-			return res.Error
-		}
+		eg.Go(func() error {
+			return tx.Save(&account).Error
+		})
 
-		deposit.Type = "DEPOSIT"
-		deposit.TransactionID = uuid.New().String()
-		if res := s.db.Save(&deposit); res.Error != nil {
-			return res.Error
-		}
+		eg.Go(func() error {
+			return tx.Save(&deposit).Error
+		})
 
-		return nil
+		return eg.Wait()
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Deposit"})
 		return
@@ -198,19 +201,20 @@ func (s *Server) handleWithdraw(c *gin.Context) {
 
 	account.Balance -= withdraw.Amount
 
+	withdraw.Type = "WITHDRAW"
+	withdraw.TransactionID = uuid.New().String()
+
+	eg := errgroup.Group{}
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if res := s.db.Save(&account); res.Error != nil {
-			return res.Error
-		}
+		eg.Go(func() error {
+			return tx.Save(&account).Error
+		})
 
-		withdraw.Type = "WITHDRAW"
-		withdraw.TransactionID = uuid.New().String()
+		eg.Go(func() error {
+			return tx.Save(&withdraw).Error
+		})
 
-		if res := s.db.Save(&withdraw); res.Error != nil {
-			return res.Error
-		}
-
-		return nil
+		return eg.Wait()
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Withdrawl"})
 		return
@@ -266,22 +270,23 @@ func (s *Server) handleSendTransfer(c *gin.Context) {
 
 	senderAccount.Balance -= transfer.Amount
 
+	eg := errgroup.Group{}
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if res := tx.Save(&senderAccount); res.Error != nil {
-			return res.Error
-		}
+		eg.Go(func() error {
+			return tx.Save(&senderAccount).Error
+		})
 
-		if res := tx.Save(&transferRow); res.Error != nil {
-			return res.Error
-		}
+		eg.Go(func() error {
+			return tx.Save(&transferRow).Error
+		})
 
-		if res := tx.Save(&transactionDetails); res.Error != nil {
-			return res.Error
-		}
+		eg.Go(func() error {
+			return tx.Save(&transactionDetails).Error
+		})
 
-		return nil
+		return eg.Wait()
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Transfer"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Send Transfer"})
 		return
 	}
 
@@ -312,7 +317,7 @@ func (s *Server) handleAcceptTransfer(c *gin.Context) {
 	}
 
 	if tranferDetails.ReceiverID != userID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You are not unable to accept this Trasfer"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not able to accept this Trasfer"})
 		return
 	}
 
@@ -332,22 +337,23 @@ func (s *Server) handleAcceptTransfer(c *gin.Context) {
 		Type:          "TRANSFER",
 	}
 
+	eg := errgroup.Group{}
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if res := tx.Save(&userAccount); res.Error != nil {
-			return res.Error
-		}
+		eg.Go(func() error {
+			return tx.Save(&userAccount).Error
+		})
 
-		if res := tx.Save(&tranferDetails); res.Error != nil {
-			return res.Error
-		}
+		eg.Go(func() error {
+			return tx.Save(&tranferDetails).Error
+		})
 
-		if res := tx.Save(&transactionDetails); res.Error != nil {
-			return res.Error
-		}
+		eg.Go(func() error {
+			return tx.Save(&transactionDetails).Error
+		})
 
-		return nil
+		return eg.Wait()
 	}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Transfer"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Accept Transfer"})
 		return
 	}
 

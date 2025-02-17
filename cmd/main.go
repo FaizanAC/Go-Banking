@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/FaizanAC/Go-Banking/internal/database"
-	"github.com/FaizanAC/Go-Banking/internal/models"
 	"github.com/FaizanAC/Go-Banking/internal/server"
 	"github.com/joho/godotenv"
 )
@@ -17,10 +16,7 @@ func main() {
 	}
 
 	db := database.NewDatabase()
-	db.AutoMigrate(&models.User{})
-	db.AutoMigrate(&models.BankAccount{})
-	db.AutoMigrate(&models.Transaction{})
-	db.AutoMigrate(&models.Transfer{})
+	database.MigrateDB(db)
 
 	s := server.NewServer(
 		db, os.Getenv("PORT"),

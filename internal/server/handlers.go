@@ -288,3 +288,33 @@ func (s *Server) handleTransfer(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"New Balance": senderAccount.Balance})
 }
+
+func (s *Server) handleActivityFeed(c *gin.Context) {
+	userID, hasKey := c.Get("userID")
+	if !hasKey {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var allAccounts []models.BankAccount
+	if err := s.db.Where("user_id = ?", userID).Find(&allAccounts).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"lastestActivity": nil})
+		return
+	}
+
+	accountNumbers, seenNumber := []string{}, make(map[string]bool)
+	for _, nextAccount := range allAccounts {
+		if _, hasKey := seenNumber[nextAccount.AccountNumber]; !hasKey {
+			accountNumbers = append(accountNumbers, nextAccount.AccountNumber)
+			seenNumber[nextAccount.AccountNumber] = true
+		}
+	}
+
+	var latestTransactions []models.Transaction
+	if err := s.db.Where("account_number IN ?", accountNumbers).Order("created_at desc").Limit(10).Find(&latestTransactions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get Activity Feed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"latestActivity": latestTransactions})
+}

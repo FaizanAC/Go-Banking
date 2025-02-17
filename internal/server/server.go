@@ -32,7 +32,7 @@ func (s *Server) Start() {
 	r.POST("/deposit", middleware.AuthorizeRequest, s.handleDeposit)
 	r.POST("/withdraw", middleware.AuthorizeRequest, s.handleWithdraw)
 	r.POST("/transfer", middleware.AuthorizeRequest, s.handleTransfer)
-	// r.GET("activity-feed", middleware.AuthorizeRequest, s.handleActivityFeed)
+	r.GET("activity-feed", middleware.AuthorizeRequest, s.handleActivityFeed)
 
 	fmt.Println("Server is running on port", s.Port)
 	r.Run()

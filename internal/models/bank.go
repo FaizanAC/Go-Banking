@@ -2,19 +2,17 @@ package models
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type BankAccount struct {
-	gorm.Model
+	GormModel
 	AccountNumber string  `json:"accountNumber" gorm:"unique"`
 	UserID        uint    `json:"userId"`
 	Balance       float64 `json:"balance"`
 }
 
 type Transaction struct {
-	gorm.Model
+	GormModel
 	Amount        float64 `json:"amount" binding:"required"`
 	AccountNumber string  `json:"accountNumber" binding:"required"`
 	TransactionID string  `json:"transactionId" gorm:"unique"`
@@ -22,7 +20,7 @@ type Transaction struct {
 }
 
 type Transfer struct {
-	gorm.Model
+	GormModel
 	SenderID      uint      `json:"senderId" binding:"required"`
 	ReceiverID    uint      `json:"receiverId" binding:"required"`
 	Amount        float64   `json:"amount"`

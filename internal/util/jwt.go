@@ -2,20 +2,19 @@ package util
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func GenerateJWT(secretKey []byte, userID uint) (string, error) {
+func GenerateJWT(userID uint) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": userID,
 		"exp": time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	tokenString, err := token.SignedString(secretKey)
+	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_KEY")))
 
 	return tokenString, err
 }
@@ -28,9 +27,6 @@ func ParseJWT(tokenString string) (*jwt.Token, error) {
 
 		return []byte(os.Getenv("JWT_KEY")), nil
 	})
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	return token, err
 }

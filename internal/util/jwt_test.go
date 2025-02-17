@@ -1,7 +1,6 @@
 package util
 
 import (
-	"os"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -9,7 +8,7 @@ import (
 
 func TestGenerateAndParseJWT(t *testing.T) {
 	var userID uint = 1
-	tokenString, err := GenerateJWT([]byte(os.Getenv("JWT_KEY")), userID)
+	tokenString, err := GenerateJWT(userID)
 	if err != nil {
 		t.Fatalf("GenerateJWT threw an Error %v", err)
 	}

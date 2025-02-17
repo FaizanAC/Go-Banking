@@ -27,12 +27,20 @@ func (s *Server) Start() {
 	r.POST("/login", s.handleLogin)
 
 	// Bank
-	r.POST("/new-account", middleware.AuthorizeRequest, s.handleNewAccount)
-	r.GET("/account/:id", middleware.AuthorizeRequest, s.handleGetAccount)
-	r.POST("/deposit", middleware.AuthorizeRequest, s.handleDeposit)
-	r.POST("/withdraw", middleware.AuthorizeRequest, s.handleWithdraw)
-	r.POST("/transfer", middleware.AuthorizeRequest, s.handleTransfer)
-	r.GET("activity-feed", middleware.AuthorizeRequest, s.handleActivityFeed)
+	bankGroup := r.Group("/bank")
+	{
+		bankGroup.POST("/new-account", middleware.AuthorizeRequest, s.handleNewAccount)
+		bankGroup.GET("/account/:id", middleware.AuthorizeRequest, s.handleGetAccount)
+		bankGroup.POST("/deposit", middleware.AuthorizeRequest, s.handleDeposit)
+		bankGroup.POST("/withdraw", middleware.AuthorizeRequest, s.handleWithdraw)
+		bankGroup.GET("/activity-feed", middleware.AuthorizeRequest, s.handleActivityFeed)
+
+		transferGroup := bankGroup.Group("/transfer")
+		{
+			transferGroup.POST("/send", middleware.AuthorizeRequest, s.handleSendTransfer)
+			transferGroup.POST("/accept", middleware.AuthorizeRequest, s.handleAcceptTransfer)
+		}
+	}
 
 	fmt.Println("Server is running on port", s.Port)
 	r.Run()

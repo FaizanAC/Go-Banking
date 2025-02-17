@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/FaizanAC/Go-Banking/internal/models"
@@ -41,7 +40,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
-	jwtToken, err := util.GenerateJWT([]byte(os.Getenv("JWT_KEY")), user.ID)
+	jwtToken, err := util.GenerateJWT(user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Generate JWT"})
 		return
@@ -220,7 +219,7 @@ func (s *Server) handleWithdraw(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"New Balance": account.Balance})
 }
 
-func (s *Server) handleTransfer(c *gin.Context) {
+func (s *Server) handleSendTransfer(c *gin.Context) {
 	var transfer struct {
 		Amount        float64 `json:"amount" binding:"required"`
 		AccountNumber string  `json:"accountNumber" binding:"required"`
@@ -287,6 +286,72 @@ func (s *Server) handleTransfer(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"New Balance": senderAccount.Balance})
+}
+
+func (s *Server) handleAcceptTransfer(c *gin.Context) {
+	var acceptTransfer struct {
+		TransactionID string `json:"transactionID" binding:"required"`
+		AccountNumber string `json:"accountNumber" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&acceptTransfer); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, hasKey := c.Get("userID")
+	if !hasKey {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var tranferDetails models.Transfer
+	if err := s.db.Where("transaction_id = ?", acceptTransfer.TransactionID).First(&tranferDetails).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Sender Account not Found"})
+		return
+	}
+
+	if tranferDetails.ReceiverID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not unable to accept this Trasfer"})
+		return
+	}
+
+	var userAccount models.BankAccount
+	if err := s.db.Where("account_number = ?", acceptTransfer.AccountNumber).Find(&userAccount).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "The desired Account does not exist"})
+		return
+	}
+
+	userAccount.Balance += tranferDetails.Amount
+	tranferDetails.Status = "ACCEPTED"
+
+	transactionDetails := models.Transaction{
+		Amount:        tranferDetails.Amount,
+		AccountNumber: userAccount.AccountNumber,
+		TransactionID: uuid.New().String(),
+		Type:          "TRANSFER",
+	}
+
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if res := tx.Save(&userAccount); res.Error != nil {
+			return res.Error
+		}
+
+		if res := tx.Save(&tranferDetails); res.Error != nil {
+			return res.Error
+		}
+
+		if res := tx.Save(&transactionDetails); res.Error != nil {
+			return res.Error
+		}
+
+		return nil
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Transfer"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"New Balance": userAccount.Balance})
 }
 
 func (s *Server) handleActivityFeed(c *gin.Context) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAuthorizeRequestSucceeds(t *testing.T) {
@@ -29,16 +30,12 @@ func TestAuthorizeRequestSucceeds(t *testing.T) {
 	})
 
 	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_KEY")))
-	if err != nil {
-		t.Fatalf("Could not create JWT")
-	}
+	assert.Nil(t, err)
 
 	c.Request.Header.Set("Cookie", "token="+tokenString)
 	AuthorizeRequest(c)
 
-	if c.IsAborted() {
-		t.Fatalf("Request should not have been aborted")
-	}
+	assert.Equal(t, c.IsAborted(), false)
 }
 
 func TestAuthorizeRequestAborts(t *testing.T) {
@@ -58,14 +55,10 @@ func TestAuthorizeRequestAborts(t *testing.T) {
 	})
 
 	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_KEY")))
-	if err != nil {
-		t.Fatalf("Could not create JWT")
-	}
+	assert.Nil(t, err)
 
 	c.Request.Header.Set("Cookie", "token="+tokenString)
 	AuthorizeRequest(c)
 
-	if !c.IsAborted() {
-		t.Fatalf("Request should have been aborted")
-	}
+	assert.Equal(t, c.IsAborted(), true)
 }

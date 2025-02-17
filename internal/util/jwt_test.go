@@ -4,23 +4,18 @@ import (
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateAndParseJWT(t *testing.T) {
 	var userID uint = 1
 	tokenString, err := GenerateJWT(userID)
-	if err != nil {
-		t.Fatalf("GenerateJWT threw an Error %v", err)
-	}
+	assert.Nil(t, err)
 
 	jwtToken, err := ParseJWT(tokenString)
-	if err != nil {
-		t.Fatalf("ParseJWT failed to Parse %v", err)
-	}
+	assert.Nil(t, err)
 
 	if claims, ok := jwtToken.Claims.(jwt.MapClaims); ok {
-		if claims["sub"] != float64(userID) {
-			t.Fatalf("JWT UserID does not match")
-		}
+		assert.Equal(t, claims["sub"], float64(userID))
 	}
 }

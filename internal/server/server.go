@@ -13,7 +13,7 @@ type Server struct {
 	Port string
 }
 
-func (s *Server) Start() {
+func (s *Server) SetupRouter() *gin.Engine {
 	r := gin.Default()
 
 	// Health
@@ -41,6 +41,12 @@ func (s *Server) Start() {
 			transferGroup.POST("/accept", middleware.AuthorizeRequest, s.handleAcceptTransfer)
 		}
 	}
+
+	return r
+}
+
+func (s *Server) Start() {
+	r := s.SetupRouter()
 
 	fmt.Println("Server is running on port", s.Port)
 	r.Run()

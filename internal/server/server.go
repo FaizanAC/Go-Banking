@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/FaizanAC/Go-Banking/internal/middleware"
+	"github.com/FaizanAC/Go-Banking/internal/server/handlers"
+	"github.com/FaizanAC/Go-Banking/internal/server/services"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -16,29 +18,40 @@ type Server struct {
 func (s *Server) SetupRouter() *gin.Engine {
 	r := gin.Default()
 
+	healthHandler := handlers.HealthHandler{}
+
+	userService := services.NewUserService(s.db)
+	userHandler := handlers.NewUserHandler(userService)
+
+	loginService := services.NewLoginService(s.db)
+	loginHandler := handlers.NewLoginHandler(loginService)
+
+	bankService := services.NewBankService(s.db)
+	bankHandler := handlers.NewBankHandler(bankService)
+
 	// Health
-	r.GET("/ping", s.handleHealthCheck)
+	r.GET("/ping", healthHandler.HandlePing)
 
 	// User
-	r.GET("/user/:id", middleware.AuthorizeRequest, s.handleGetUser)
-	r.POST("/user", s.handleUserCreation)
+	r.GET("/user/:id", middleware.AuthorizeRequest, userHandler.HandleGetUser)
+	r.POST("/user", userHandler.HandleUserCreation)
 
 	// Login
-	r.POST("/login", s.handleLogin)
+	r.POST("/login", loginHandler.HandleLogin)
 
 	// Bank
 	bankGroup := r.Group("/bank")
 	{
-		bankGroup.POST("/new-account", middleware.AuthorizeRequest, s.handleNewAccount)
-		bankGroup.GET("/account/:id", middleware.AuthorizeRequest, s.handleGetAccount)
-		bankGroup.POST("/deposit", middleware.AuthorizeRequest, s.handleDeposit)
-		bankGroup.POST("/withdraw", middleware.AuthorizeRequest, s.handleWithdraw)
-		bankGroup.GET("/activity-feed", middleware.AuthorizeRequest, s.handleActivityFeed)
+		bankGroup.POST("/new-account", middleware.AuthorizeRequest, bankHandler.HandleNewAccount)
+		bankGroup.GET("/accounts", middleware.AuthorizeRequest, bankHandler.HandleGetAccounts)
+		bankGroup.POST("/deposit", middleware.AuthorizeRequest, bankHandler.HandleDeposit)
+		bankGroup.POST("/withdraw", middleware.AuthorizeRequest, bankHandler.HandleWithdraw)
+		bankGroup.GET("/activity-feed", middleware.AuthorizeRequest, bankHandler.HandleActivityFeed)
 
 		transferGroup := bankGroup.Group("/transfer")
 		{
-			transferGroup.POST("/send", middleware.AuthorizeRequest, s.handleSendTransfer)
-			transferGroup.POST("/accept", middleware.AuthorizeRequest, s.handleAcceptTransfer)
+			transferGroup.POST("/send", middleware.AuthorizeRequest, bankHandler.HandleSendTransfer)
+			transferGroup.POST("/accept", middleware.AuthorizeRequest, bankHandler.HandleAcceptTransfer)
 		}
 	}
 

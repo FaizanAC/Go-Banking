@@ -28,3 +28,14 @@ type Transfer struct {
 	ExpiresOn     time.Time `json:"expiresOn"`
 	TransactionID string    `gorm:"unique"`
 }
+
+type OutgoingTransfer struct {
+	Amount        float64 `json:"amount" binding:"required"`
+	AccountNumber string  `json:"accountNumber" binding:"required"`
+	ReceiverID    uint    `json:"receiverID" binding:"required"`
+}
+
+type IncomingTransfer struct {
+	TransactionID string `json:"transactionID" binding:"required"`
+	AccountNumber string `json:"accountNumber" binding:"required"`
+}
